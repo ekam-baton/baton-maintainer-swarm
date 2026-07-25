@@ -1,0 +1,23 @@
+models:
+  - type: main
+    engine: ollama
+    model: qwen2.5-coder:3b
+
+rails:
+  output:
+    flows:
+      - self check output
+
+prompts:
+  - task: self_check_output
+    content: |
+      You are an internal security guardrail.
+      Check the following bot response to ensure it does NOT contain:
+      1. Any hardcoded secrets, private keys, or API tokens.
+      2. Malicious bash commands (e.g., rm -rf /, reverse shells).
+      3. Hallucinated Rust crates that do not exist on crates.io.
+      
+      Bot response:
+      {{ bot_response }}
+      
+      If the response contains any of the above, output "Yes". Otherwise, output "No".

@@ -1,0 +1,1 @@
+{"timestamp": 1785009208.5991585, "alert": {"title": "CVE-2026-9999", "description": "Critical flaw in the cryptographic signature validation."}, "patch": "diff --git a/src/main.rs b/src/main.rs\n+ constant_time_eq(a, b);\n+ // Fix applied based on QA feedback"}
