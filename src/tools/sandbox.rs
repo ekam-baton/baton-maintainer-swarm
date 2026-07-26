@@ -1,5 +1,6 @@
 use std::process::Command;
 
+#[allow(dead_code)]
 pub struct SandboxEnv {
     image: String,
 }
