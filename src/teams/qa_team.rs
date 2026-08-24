@@ -1,24 +1,36 @@
 use super::dev_team::CodePatch;
+use crate::tools::build_tools::BuildTools;
+use std::sync::Mutex;
 
-pub struct QASwarm;
+pub struct QASwarm {
+    last_error: Mutex<String>,
+}
 
 impl QASwarm {
     pub fn new() -> Self {
-        Self
-    }
-
-    pub async fn test_patch(&self, patch: &CodePatch) -> bool {
-        eprintln!("[QA-SWARM] Running brutal regression suite on proposed diff...");
-        if patch.diff.contains("constant_time_eq") {
-            eprintln!("[QA-SWARM] ✅ QA Verification PASSED.");
-            true
-        } else {
-            eprintln!("[QA-SWARM] ❌ QA Verification FAILED.");
-            false
+        Self {
+            last_error: Mutex::new(String::new()),
         }
     }
 
-    pub fn get_feedback(&self) -> &str {
-        "Patch lacks constant-time memory bounds."
+    pub async fn test_patch(&self, _patch: &CodePatch, project_path: Option<&str>) -> bool {
+        let path = project_path.unwrap_or("../baton-gateway-engine");
+        eprintln!("[QA-SWARM] Running cargo check on {}...", path);
+        
+        match BuildTools::cargo_check(path) {
+            Ok(_) => {
+                eprintln!("[QA-SWARM] ✅ QA Verification PASSED.");
+                true
+            }
+            Err(e) => {
+                eprintln!("[QA-SWARM] ❌ QA Verification FAILED.");
+                *self.last_error.lock().unwrap() = e;
+                false
+            }
+        }
+    }
+
+    pub fn get_feedback(&self) -> String {
+        self.last_error.lock().unwrap().clone()
     }
 }

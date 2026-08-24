@@ -17,9 +17,11 @@ use teams::dev_team::DevSwarm;
 use teams::qa_team::QASwarm;
 use tools::build_tools::BuildTools;
 
+use std::sync::OnceLock;
+
 type HmacSha256 = Hmac<Sha256>;
 
-const WEBHOOK_SECRET: &str = "baton-super-secret-key-2026";
+static WEBHOOK_SECRET: OnceLock<String> = OnceLock::new();
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AlertPayload {
@@ -29,7 +31,8 @@ pub struct AlertPayload {
 }
 
 fn verify_hmac(payload_bytes: &[u8], signature_hex: &str) -> bool {
-    let Ok(mut mac) = HmacSha256::new_from_slice(WEBHOOK_SECRET.as_bytes()) else {
+    let secret = WEBHOOK_SECRET.get().expect("WEBHOOK_SECRET not initialized");
+    let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) else {
         return false;
     };
     mac.update(payload_bytes);
@@ -46,14 +49,14 @@ async fn handle_alert(alert: AlertPayload) {
     let mut patch = dev_swarm.debate_and_patch(&alert.title).await;
 
     let qa_swarm = QASwarm::new();
-    let mut passed = qa_swarm.test_patch(&patch).await;
+    let mut passed = qa_swarm.test_patch(&patch, None).await;
 
     let mut iteration = 1;
     while !passed && iteration < 5 {
         eprintln!("[MAINTAINER-SWARM] QA rejected patch. Iteration {}", iteration);
         let feedback = qa_swarm.get_feedback();
-        dev_swarm.revise_patch(&mut patch, feedback).await;
-        passed = qa_swarm.test_patch(&patch).await;
+        dev_swarm.revise_patch(&mut patch, &feedback).await;
+        passed = qa_swarm.test_patch(&patch, None).await;
         iteration += 1;
     }
 
@@ -107,6 +110,12 @@ async fn webhook_handler(headers: HeaderMap, body_str: String) -> Result<Json<se
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+
+    let secret = std::env::var("WEBHOOK_SECRET").unwrap_or_else(|_| {
+        eprintln!("[SECURITY] FATAL: WEBHOOK_SECRET environment variable is not set!");
+        std::process::exit(1);
+    });
+    WEBHOOK_SECRET.set(secret).unwrap();
 
     let app = Router::new().route("/webhook/alert", post(webhook_handler));
 
